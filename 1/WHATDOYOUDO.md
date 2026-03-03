@@ -2,7 +2,9 @@
 
 1. Write for omp version code of initial version code
 
-2. Compile omp version: gcc -O3 var03.omp.c -fopenmp -lm -o var03.omp
+2. Compile omp version:
+
+gcc -O3 var03.foromp.c -fopenmp -lm -o var03.foromp
 
 -O3 - level optimization
 -fopenmp - include openmp library
