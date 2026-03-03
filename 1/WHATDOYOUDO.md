@@ -1,4 +1,6 @@
-1. Write omp version code of initial version code
+## FOROMP VERSION
+
+1. Write for omp version code of initial version code
 
 2. Compile omp version: gcc -O3 var03.omp.c -fopenmp -lm -o var03.omp
 
@@ -6,3 +8,8 @@
 -fopenmp - include openmp library
 -lm - include library libm.so
 
+3. Test its version program
+
+## TASKOMP VERSION
+
+1. 
