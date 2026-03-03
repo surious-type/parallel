@@ -89,7 +89,6 @@ void verify()
 
 	s=0.;
 
-    #pragma omp parallel for collapse(3) private(k,j,i) reduction(+:s) schedule(static)
 	for(k=0; k<=N-1; k++)
 	for(j=0; j<=N-1; j++)
 	for(i=0; i<=N-1; i++)
