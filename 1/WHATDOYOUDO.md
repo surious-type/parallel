@@ -14,4 +14,13 @@ gcc -O3 var03.foromp.c -fopenmp -lm -o var03.foromp
 
 ## TASKOMP VERSION
 
-1. 
+Параллелизация кода заключается в разбитие циклов на задачи.
+Каждая задача группирует N количество итераций цикла.
+
+1. Implementation omp task version code
+
+2. Compile:
+
+gcc -O3 var03.taskomp.c -fopenmp -lm -o var03.taskomp
+
+3. Test
