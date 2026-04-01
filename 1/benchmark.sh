@@ -35,12 +35,13 @@ while IFS='|' read -r TAG FLAGS; do
 
     for ((t=1; t<=MAX_THREADS; t*=2)); do
         for ((r=1; r<=RUNS; r++)); do
+            start=$(date +%s.%N)
 
-            TIME=$(
-                OMP_NUM_THREADS=$t \
-                /usr/bin/time -f "%e" ./$BIN \
-                1>/dev/null 2>&1
-            )
+            OMP_NUM_THREADS=$t ./$BIN > /dev/null 2>&1
+
+            end=$(date +%s.%N)
+
+            TIME=$(echo "$end - $start" | bc)
 
             echo "$t,$r,$TIME" >> $CSV
         done

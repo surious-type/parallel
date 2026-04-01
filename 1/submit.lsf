@@ -1,8 +1,8 @@
 #!/bin/bash
 #BSUB -n 16
 #BSUB -W 00:20
-#BSUB -o out.%J
-#BSUB -e err.%J
+#BSUB -o ~/logs/out/out.%J
+#BSUB -e ~/logs/err/err.%J
 #BSUB -R "span[hosts=1]"
 
 ./benchmark.sh var03.foromp.c
