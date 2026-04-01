@@ -7,12 +7,15 @@ RUNS=5
 OUT_DIR="results"
 mkdir -p $OUT_DIR
 
-CC=gcc
+CC=xlc_r
 
-FLAG_SETS=$'O0|-O0 -fopenmp
-O2|-O2 -fopenmp
-O3|-O3 -fopenmp
-Ofast|-Ofast -fopenmp'
+FLAG_SETS=$'
+O0|-O0
+O2|-O2
+O3|-O3
+O4|-O4
+O5|-O5
+'
 
 MAX_THREADS=${LSB_DJOB_NUMPROC:-$(nproc)}
 
@@ -23,7 +26,7 @@ while IFS='|' read -r TAG FLAGS; do
     CSV="$OUT_DIR/$BIN.csv"
 
     echo "compile $BIN"
-    if ! $CC $FLAGS $SRC -o $BIN -lm; then
+    if ! $CC $FLAGS $SRC -qsmp=omp -o $BIN -lm; then
         echo "compile fail $TAG"
         continue
     fi

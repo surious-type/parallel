@@ -56,8 +56,8 @@ void relax()
         for(int k = 3; k <= N - 4; k++)
         {
             #pragma omp for schedule(static)
-            for(int j = 1; j <= N - 2; j++)
             for(int i = 1; i <= N - 2; i++)
+            for(int j = 1; j <= N - 2; j++)
             {
                 A[i][j][k] = (A[i][j][k-1]+A[i][j][k+1]+A[i][j][k-2]+A[i][j][k+2]+A[i][j][k-3]+A[i][j][k+3])/6.f;
             }
@@ -66,8 +66,8 @@ void relax()
         for(int i = 3; i <= N - 4; i++)
         {
             #pragma omp for schedule(static)
-            for(int k = 1; k <= N - 2; k++)
             for(int j = 1; j <= N - 2; j++)
+            for(int k = 1; k <= N - 2; k++)
             {
                 A[i][j][k] = (A[i-1][j][k]+A[i+1][j][k]+A[i-2][j][k]+A[i+2][j][k]+A[i-3][j][k]+A[i+3][j][k])/6.;
             }
@@ -76,8 +76,8 @@ void relax()
         for(int j = 3; j <= N - 4; j++)
         {
             #pragma omp for reduction(max:layer_eps) schedule(static)
-            for (int k = 1; k <= N - 2; k++)
             for (int i = 1; i <= N - 2; i++)
+            for (int k = 1; k <= N - 2; k++)
             {
                 float e = A[i][j][k];
                 A[i][j][k] =
