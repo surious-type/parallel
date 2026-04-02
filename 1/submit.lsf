@@ -1,5 +1,5 @@
 #!/bin/bash
-#BSUB -n 16
+#BSUB -n 80
 #BSUB -W 00:20
 #BSUB -o ~/logs/out/out.%J
 #BSUB -e ~/logs/err/err.%J
