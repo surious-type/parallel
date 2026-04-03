@@ -38,7 +38,7 @@ while IFS='|' read -r TAG FLAGS; do
 
     for ((t = 1; t <= MAX_THREADS; t *= 2)); do
         for ((r = 1; r <= RUNS; r++)); do
-            TIME=$(OMP_NUM_THREADS=$t "$BIN" 2>/dev/null | awk -F'=' '/time=/ {print $2}')
+            TIME=$(OMP_NUM_THREADS=$t "$BIN" 2>&1 | awk -F'=' '/time=/ {print $2}')
             echo "$t,$r,$TIME" >>"$CSV"
         done
     done
