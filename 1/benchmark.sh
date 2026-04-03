@@ -1,23 +1,26 @@
 #!/usr/bin/env bash
-set -uo pipefail
+set -euo pipefail
 
 SRC=$1
+COMPILER=${2:-gcc}
 RUNS=5
 
 OUT_DIR="results"
 mkdir -p $OUT_DIR
 
-if [ "$2" = "xlc_r" ]; then
-    CC="xlc_r -qsmp=omp"
+if [ "$COMPILER" = "xlc_r" ]; then
+    CC="xlc_r"
+    FLAG_SETS=$'O2|-qsmp=omp
+O3|-qsmp=omp -O3
+O4|-qsmp=omp -O4
+O5|-qsmp=omp -O5'
 else
-    CC="gcc -fopenmp"
+    CC="gcc"
+    FLAG_SETS=$'O2|-fopenmp -O2
+O3|-fopenmp -O3
+O4|-fopenmp -O4
+O5|-fopenmp -O5'
 fi
-
-FLAG_SETS=$'O0|-O0
-O2|-O2
-O3|-O3
-O4|-O4
-O5|-O5'
 
 MAX_THREADS=${LSB_DJOB_NUMPROC:-$(nproc)}
 
