@@ -5,7 +5,10 @@
 #define  Max(a,b) ((a)>(b)?(a):(b))
 #define  Min(a,b) ((a)<(b)?(a):(b))
 
-#define  N   (2*2*2*2*2*2+2)
+#ifndef N
+#define N (2*2*2*2*2*2+2)
+#endif
+
 float   maxeps = 0.1e-7;
 int itmax = 100;
 

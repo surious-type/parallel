@@ -3,7 +3,10 @@
 #include <stdio.h>
 #define  Max(a,b) ((a)>(b)?(a):(b))
 
-#define  N   (2*2*2*2*2*2+2)
+#ifndef N
+#define N (2*2*2*2*2*2+2)
+#endif
+
 float   maxeps = 0.1e-7;
 int itmax = 100;
 int i,j,k;
@@ -17,6 +20,7 @@ void verify();
 
 int main(int an, char **as)
 {
+    printf("%d\n", N);
 	int it;
 	init();
 
