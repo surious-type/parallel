@@ -7,9 +7,9 @@ FLAG_OPTIMIZE=${3:-"-O2"}
 RUNS=5
 
 N_BASE=$((2 ** 6)) # 64
-MEM=$(awk '/MemAvailable/ {print $2}' /proc/meminfo)
-MEM_HALF=$((MEM / 2))
-K=$(awk -v m="$MEM_HALF" -v nbase="$N_BASE" 'BEGIN {printf "%d", ((m*1024/8)^(1/3))/nbase}')
+# MEM=$(awk '/MemAvailable/ {print $2}' /proc/meminfo)
+# MEM_HALF=$((MEM / 2))
+# K=$(awk -v m="$MEM_HALF" -v nbase="$N_BASE" 'BEGIN {printf "%d", ((m*1024/8)^(1/3))/nbase}')
 
 OUT_DIR="results"
 mkdir -p $OUT_DIR
@@ -28,11 +28,8 @@ NAME="$(basename ${SRC%.c}_${FLAG_OPTIMIZE})"
 CSV="${OUT_DIR}/${NAME}.csv"
 echo "threads,run,time,N" >$CSV
 
-for (( ; K > 0; K--)); do
-    N=$((2 ** K + 2))
-    ((N < N_BASE)) && break
-    echo $N_BASE
-    echo $N
+for (( K = 0; K < 4; K++)); do
+    N=$((N_BASE * (2 ** K ) + 2))
     NAME_N="$(basename ${SRC%.c}_${FLAG_OPTIMIZE}_${N})"
     BIN="bin/${NAME_N}"
     echo "compile ${NAME_N}"
@@ -48,4 +45,5 @@ for (( ; K > 0; K--)); do
             echo "$t,$r,$TIME,$N" >>"$CSV"
         done
     done
+    echo $N
 done
