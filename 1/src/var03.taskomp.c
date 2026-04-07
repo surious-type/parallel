@@ -9,7 +9,7 @@
 #define N (2*2*2*2*2*2+2)
 #endif
 
-float   maxeps = 0.1e-7;
+float maxeps = 0.1e-7;
 int itmax = 100;
 
 float eps;
@@ -21,13 +21,13 @@ void verify();
 
 int main(int an, char **as)
 {
-    double start = omp_get_wtime();
-
     init();
+
+    double start = omp_get_wtime();
 
     for(int it = 1; it <= itmax; it++)
     {
-        eps = 0.;
+        eps = 0.0f;
 
         relax();
         
@@ -36,11 +36,11 @@ int main(int an, char **as)
         if (eps < maxeps) break;
     }
 
-    verify();
-
     double end = omp_get_wtime();
     
     printf("time=%f\n", end - start);
+
+    verify();
 
     return 0;
 }
@@ -51,8 +51,8 @@ void init()
 	for(int j=0; j<=N-1; j++)
 	for(int i=0; i<=N-1; i++)
 	{
-		if(i==0 || i==N-1 || j==0 || j==N-1 || k==0 || k==N-1) A[i][j][k] = 0.;
-		else A[i][j][k] = ( 1. + i + j + k ) ;
+		if(i==0 || i==N-1 || j==0 || j==N-1 || k==0 || k==N-1) A[i][j][k] = 0.0f;
+		else A[i][j][k] = ( 1.0f + i + j + k );
 	}
 } 
 
@@ -64,95 +64,79 @@ void relax()
 
     #pragma omp parallel
     {
-        #pragma omp single
+        #pragma omp single nowait
         {
-            for (int k = 3; k <= N - 4; k++)
+            #pragma omp taskgroup
+            for (int jb = 1; jb <= N - 2; jb += JB)
+            for (int ib = 1; ib <= N - 2; ib += IB)
             {
-                for (int jb = 1; jb <= N - 2; jb += JB)
-                for (int ib = 1; ib <= N - 2; ib += IB)
-                {
-                    int j0 = jb;
-                    int j1 = Min(jb + JB - 1, N - 2);
-                    int i0 = ib;
-                    int i1 = Min(ib + IB - 1, N - 2);
+                int j0 = jb;
+                int j1 = Min(jb + JB - 1, N - 2);
+                int i0 = ib;
+                int i1 = Min(ib + IB - 1, N - 2);
 
-                    #pragma omp task firstprivate(k, j0, j1, i0, i1)
+                #pragma omp task firstprivate(j0, j1, i0, i1)
+                {
+                    for (int j = j0; j <= j1; j++)
+                    for (int i = i0; i <= i1; i++)
+                    for (int k = 3; k <= N - 4; k++)
                     {
-                        for (int j = j0; j <= j1; j++)
-                        for (int i = i0; i <= i1; i++)
-                        {
-                            A[i][j][k] =
-                                (A[i][j][k-1] + A[i][j][k+1] +
-                                 A[i][j][k-2] + A[i][j][k+2] +
-                                 A[i][j][k-3] + A[i][j][k+3]) / 6.f;
-                        }
+                        A[i][j][k] =
+                            (A[i][j][k-1] + A[i][j][k+1] +
+                             A[i][j][k-2] + A[i][j][k+2] +
+                             A[i][j][k-3] + A[i][j][k+3]) / 6.0f;
                     }
                 }
-                #pragma omp taskwait
             }
 
-            for (int i = 3; i <= N - 4; i++)
+            #pragma omp taskgroup
+            for (int kb = 1; kb <= N - 2; kb += KB)
+            for (int jb = 1; jb <= N - 2; jb += JB)
             {
-                for (int kb = 1; kb <= N - 2; kb += KB)
-                for (int jb = 1; jb <= N - 2; jb += JB)
-                {
-                    int k0 = kb;
-                    int k1 = Min(kb + KB - 1, N - 2);
-                    int j0 = jb;
-                    int j1 = Min(jb + JB - 1, N - 2);
+                int k0 = kb;
+                int k1 = Min(kb + KB - 1, N - 2);
+                int j0 = jb;
+                int j1 = Min(jb + JB - 1, N - 2);
 
-                    #pragma omp task firstprivate(i, k0, k1, j0, j1)
+                #pragma omp task firstprivate(k0, k1, j0, j1)
+                {
+                    for (int k = k0; k <= k1; k++)
+                    for (int j = j0; j <= j1; j++)
+                    for (int i = 3; i <= N - 4; i++)
                     {
-                        for (int k = k0; k <= k1; k++)
-                        for (int j = j0; j <= j1; j++)
-                        {
-                            A[i][j][k] =
-                                (A[i-1][j][k] + A[i+1][j][k] +
-                                 A[i-2][j][k] + A[i+2][j][k] +
-                                 A[i-3][j][k] + A[i+3][j][k]) / 6.f;
-                        }
+                        A[i][j][k] =
+                            (A[i-1][j][k] + A[i+1][j][k] +
+                             A[i-2][j][k] + A[i+2][j][k] +
+                             A[i-3][j][k] + A[i+3][j][k]) / 6.0f;
                     }
                 }
-                #pragma omp taskwait
             }
 
-            for (int j = 3; j <= N - 4; j++)
+            #pragma omp taskgroup task_reduction(max: eps)
+            for (int kb = 1; kb <= N - 2; kb += KB)
+            for (int ib = 1; ib <= N - 2; ib += IB)
             {
-                float layer_eps = 0.f;
+                int k0 = kb;
+                int k1 = Min(kb + KB - 1, N - 2);
+                int i0 = ib;
+                int i1 = Min(ib + IB - 1, N - 2);
 
-                #pragma omp taskgroup task_reduction(max: layer_eps)
+                #pragma omp task firstprivate(k0, k1, i0, i1) in_reduction(max: eps)
                 {
-                    for (int kb = 1; kb <= N - 2; kb += KB)
-                    for (int ib = 1; ib <= N - 2; ib += IB)
+                    for (int k = k0; k <= k1; k++)
+                    for (int i = i0; i <= i1; i++)
+                    for (int j = 3; j <= N - 4; j++)
                     {
-                        int k0 = kb;
-                        int k1 = Min(kb + KB - 1, N - 2);
-                        int i0 = ib;
-                        int i1 = Min(ib + IB - 1, N - 2);
+                        float e = A[i][j][k];
+                        A[i][j][k] =
+                            (A[i][j-1][k] + A[i][j+1][k] +
+                             A[i][j-2][k] + A[i][j+2][k] +
+                             A[i][j-3][k] + A[i][j+3][k]) / 6.0f;
 
-                        #pragma omp task firstprivate(j, k0, k1, i0, i1) in_reduction(max: layer_eps)
-                        {
-                            float local_max = 0.f;
-
-                            for (int k = k0; k <= k1; k++)
-                            for (int i = i0; i <= i1; i++)
-                            {
-                                float oldv = A[i][j][k];
-                                float newv =
-                                    (A[i][j-1][k] + A[i][j+1][k] +
-                                     A[i][j-2][k] + A[i][j+2][k] +
-                                     A[i][j-3][k] + A[i][j+3][k]) / 6.f;
-
-                                A[i][j][k] = newv;
-                                local_max = Max(local_max, fabs(oldv - newv));
-                            }
-
-                            layer_eps = Max(layer_eps, local_max);
-                        }
+                        eps = Max(eps, fabsf(e - A[i][j][k]));
                     }
                 }
-                eps = Max(eps, layer_eps);
-            }   	
+            }
         }
     }
 }
@@ -161,7 +145,7 @@ void verify()
 { 
 	float s;
 
-	s=0.;
+	s=0.0f;
 
 	for(int k=0; k<=N-1; k++)
 	for(int j=0; j<=N-1; j++)
