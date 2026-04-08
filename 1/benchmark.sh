@@ -28,8 +28,8 @@ NAME="$(basename ${SRC%.c}_${FLAG_OPTIMIZE})"
 CSV="${OUT_DIR}/${NAME}.csv"
 echo "threads,run,time,N" >$CSV
 
-for (( K = 0; K < 4; K++)); do
-    N=$((N_BASE * (2 ** K ) + 2))
+for ((K = 0; K < 2; K++)); do
+    N=$((N_BASE * (2 ** K) + 2))
     NAME_N="$(basename ${SRC%.c}_${FLAG_OPTIMIZE}_${N})"
     BIN="bin/${NAME_N}"
     echo "compile ${NAME_N}"
