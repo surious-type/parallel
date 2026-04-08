@@ -9,7 +9,7 @@
 #endif
 
 float maxeps = 0.1e-7;
-int itmax = 100;
+int itmax = 10;
 int i, j, k;
 
 float eps;

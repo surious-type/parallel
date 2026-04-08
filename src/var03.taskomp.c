@@ -10,7 +10,7 @@
 #endif
 
 float maxeps = 0.1e-7;
-int itmax = 100;
+int itmax = 10;
 
 float eps;
 float A[N][N][N];
