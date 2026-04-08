@@ -1,2 +1,14 @@
-*:Zone.Identifier
-.git
+bin/*
+!bin/.gitkeep
+results/*
+!results/.gitkeep
+
+visualization/.venv
+plots
+visualization/frames_relax
+visualization/build
+visualization/benchmark_csv
+visualization/.ipynb_checkpoints
+
+.ipynb_checkpoints
+./clang-format

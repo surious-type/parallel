@@ -4,5 +4,3 @@
 #BSUB -o ~/logs/out/out.%J
 #BSUB -e ~/logs/err/err.%J
 #BSUB -R "span[hosts=1]"
-
-./benchmark.sh src/var03.foromp.c xlc_r

@@ -1,0 +1,18 @@
+BasedOnStyle: LLVM
+
+IndentWidth: 4
+TabWidth: 4
+UseTab: Always
+
+BreakBeforeBraces: Allman
+
+AllowShortFunctionsOnASingleLine: None
+AllowShortIfStatementsOnASingleLine: false
+
+ColumnLimit: 100
+
+IndentCaseLabels: true
+
+AlignOperands: true
+AlignAfterOpenBracket: Align
+IndentPPDirectives: BeforeHash

@@ -1,7 +1,0 @@
-bin/*
-visualization/.venv
-plots
-visualization/frames_relax
-visualization/build
-visualization/benchmark_csv
-visualization/.ipynb_checkpoints
