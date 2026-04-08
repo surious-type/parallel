@@ -1,4 +1,5 @@
 #include <math.h>
+#include <omp.h>
 #include <stdio.h>
 #include <stdlib.h>
 #define Max(a, b) ((a) > (b) ? (a) : (b))
@@ -24,6 +25,8 @@ int main(int an, char **as)
 	int it;
 	init();
 
+	double start = omp_get_wtime();
+
 	for (it = 1; it <= itmax; it++)
 	{
 		eps = 0.;
@@ -32,6 +35,10 @@ int main(int an, char **as)
 		if (eps < maxeps)
 			break;
 	}
+
+	double end = omp_get_wtime();
+
+	printf("time=%f\n", end - start);
 
 	verify();
 
