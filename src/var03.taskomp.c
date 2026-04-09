@@ -67,7 +67,7 @@ void relax()
 
 #pragma omp parallel
 	{
-#pragma omp single nowait
+#pragma omp single
 		{
 #pragma omp taskgroup
 			for (int jb = 1; jb <= N - 2; jb += JB)
@@ -90,6 +90,13 @@ void relax()
 								}
 					}
 				}
+		}
+	}
+
+#pragma omp parallel
+	{
+#pragma omp single
+		{
 #pragma omp taskgroup
 			for (int kb = 1; kb <= N - 2; kb += KB)
 				for (int jb = 1; jb <= N - 2; jb += JB)
@@ -111,6 +118,12 @@ void relax()
 								}
 					}
 				}
+		}
+	}
+#pragma omp parallel
+	{
+#pragma omp single
+		{
 #pragma omp taskgroup
 			{
 				for (int kb = 1; kb <= N - 2; kb += KB)
