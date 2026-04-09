@@ -1,68 +1,70 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-CC=${1:-gcc}
-SRC=$2
-FLAG_OPTIMIZE=${3:-"-O2"}
-RUNS=5
+# --- аргументы ---
+BIN_DIR=${1:-bin}
+PATTERN=${2:-"*"}
 
-N_BASE=$((2 ** 6)) # 64
+# --- настройки ---
+THREADS_LIST=(1 2 4 8 16)
+RUNS=3
 
-OUT_DIR="results"
-mkdir -p $OUT_DIR
-mkdir -p bin
+CSV_DIR="results"
+CSV_FILE="${CSV_DIR}/benchmark_results.csv"
 
-# --- выбор OpenMP флага ---
-case "$CC" in
-gcc)
-    OMP_FLAG="-fopenmp"
-    ;;
-icc)
-    OMP_FLAG="-qopenmp"
-    ;;
-pgcc)
-    OMP_FLAG="-mp"
-    ;;
-xlc_r)
-    OMP_FLAG="-qsmp=omp"
-    ;;
-*)
-    echo "Unknown compiler: $CC"
-    exit 1
-    ;;
-esac
+mkdir -p "$CSV_DIR"
 
-FLAGS="$OMP_FLAG $FLAG_OPTIMIZE"
+# --- создать CSV если нет ---
+if [ ! -f "$CSV_FILE" ]; then
+    echo "source,binary,compiler,opt,N,threads,run,time" >"$CSV_FILE"
+fi
 
-MAX_THREADS=$(nproc)
+# --- проверка существования записи ---
+exists_record() {
+    local binary=$1
+    local threads=$2
+    local run=$3
 
-echo "Compiler=$CC"
-echo "FLAGS=$FLAGS"
-echo "MAX_THREADS=$MAX_THREADS"
+    grep -q "^.*,${binary},.*,.*,.*,${threads},${run}," "$CSV_FILE"
+}
 
-NAME="$(basename ${SRC%.c}_${CC}_${FLAG_OPTIMIZE})"
-CSV="${OUT_DIR}/${NAME}.csv"
-echo "threads,run,time,N" >$CSV
+# --- парсинг имени ---
+parse_binary() {
+    local name="$1"
 
-for ((K = 0; K < 4; K++)); do
-    N=$((N_BASE * (2 ** K) + 2))
+    # var03.foromp__cc-gcc__opt-O3__N-130
+    SOURCE="${name%%__cc-*}.c"
 
-    NAME_N="$(basename ${SRC%.c}_${CC}_${FLAG_OPTIMIZE}_${N})"
-    BIN="bin/${NAME_N}"
+    COMPILER=$(echo "$name" | sed -n 's/.*__cc-\([^_]*\).*/\1/p')
+    OPT=$(echo "$name" | sed -n 's/.*__opt-\([^_]*\).*/\1/p')
+    N=$(echo "$name" | sed -n 's/.*__N-\([0-9]*\).*/\1/p')
+}
 
-    echo "compile ${NAME_N}"
+echo "Scanning ${BIN_DIR}/${PATTERN}"
 
-    if ! $CC $FLAGS $SRC -DN=$N -o $BIN -lm; then
-        echo "compile fail ${CC}_${FLAG_OPTIMIZE}_${N}"
-        continue
-    fi
+shopt -s nullglob
 
-    for ((t = 1; t <= MAX_THREADS; t *= 2)); do
-        for ((r = 1; r <= RUNS; r++)); do
-            TIME=$(OMP_NUM_THREADS=$t "$BIN" | awk -F'=' '/time=/ {print $2}')
-            echo "$t,$r,$TIME,$N" >>"$CSV"
+for BIN_PATH in "$BIN_DIR"/$PATTERN; do
+    [ -x "$BIN_PATH" ] || continue
+
+    BIN_NAME=$(basename "$BIN_PATH")
+
+    parse_binary "$BIN_NAME"
+
+    echo "run: $BIN_NAME"
+
+    for t in "${THREADS_LIST[@]}"; do
+        for r in $(seq 1 $RUNS); do
+
+            if exists_record "$BIN_NAME" "$t" "$r"; then
+                echo "skip: $BIN_NAME t=$t r=$r"
+                continue
+            fi
+
+            TIME=$(OMP_NUM_THREADS=$t "$BIN_PATH" | awk -F'=' '/time=/ {print $2}')
+
+            echo "${SOURCE},${BIN_NAME},${COMPILER},${OPT},${N},${t},${r},${TIME}" >>"$CSV_FILE"
+
         done
     done
-
-    echo "Done N=$N"
 done
