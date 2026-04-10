@@ -8,7 +8,6 @@ THREADS_LIST=(1 2 4 8 16)
 RUNS=3
 
 TASKS_DIR="tasks"
-mkdir -p "$TASKS_DIR"
 
 get_omp_flag() {
     case "$1" in
