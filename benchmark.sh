@@ -1,70 +1,54 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# --- аргументы ---
-BIN_DIR=${1:-bin}
-PATTERN=${2:-"*"}
+TASKS_DIR="${1:-tasks}"
+PATTERN="${2:-*}"
 
-# --- настройки ---
-THREADS_LIST=(1 2 4 8 16)
-RUNS=3
+RESULTS_DIR="results"
+PARTS_DIR="${RESULTS_DIR}/parts"
 
-CSV_DIR="results"
-CSV_FILE="${CSV_DIR}/benchmark_results.csv"
+HOST="$(hostname)"
+PID="$$"
+PART_CSV="${PARTS_DIR}/${HOST}__pid-${PID}.csv"
+touch "$PART_CSV"
 
-mkdir -p "$CSV_DIR"
-
-# --- создать CSV если нет ---
-if [ ! -f "$CSV_FILE" ]; then
-    echo "source,binary,compiler,opt,N,threads,run,time" >"$CSV_FILE"
-fi
-
-# --- проверка существования записи ---
-exists_record() {
-    local binary=$1
-    local threads=$2
-    local run=$3
-
-    grep -q "^.*,${binary},.*,.*,.*,${threads},${run}," "$CSV_FILE"
-}
-
-# --- парсинг имени ---
-parse_binary() {
+parse_task_name() {
     local name="$1"
 
-    # var03.foromp__cc-gcc__opt-O3__N-130
     SOURCE="${name%%__cc-*}.c"
-
-    COMPILER=$(echo "$name" | sed -n 's/.*__cc-\([^_]*\).*/\1/p')
-    OPT=$(echo "$name" | sed -n 's/.*__opt-\([^_]*\).*/\1/p')
-    N=$(echo "$name" | sed -n 's/.*__N-\([0-9]*\).*/\1/p')
+    COMPILER="$(echo "$name" | sed -n 's/.*__cc-\([^_]*\).*/\1/p')"
+    OPT="$(echo "$name" | sed -n 's/.*__opt-\([^_]*\).*/\1/p')"
+    N="$(echo "$name" | sed -n 's/.*__N-\([0-9]*\).*/\1/p')"
+    THREADS="$(echo "$name" | sed -n 's/.*__t-\([0-9]*\).*/\1/p')"
 }
 
-echo "Scanning ${BIN_DIR}/${PATTERN}"
+find_next_task() {
+    find "$TASKS_DIR" -maxdepth 1 -type f -name "$PATTERN" \
+        ! -name '*.lock' ! -name '*.done' | sort | head -n 1
+}
 
-shopt -s nullglob
+while true; do
+    TASK_PATH="$(find_next_task)"
 
-for BIN_PATH in "$BIN_DIR"/$PATTERN; do
-    [ -x "$BIN_PATH" ] || continue
+    if [ -z "$TASK_PATH" ]; then
+        echo "Нет доступных задач"
+        break
+    fi
 
-    BIN_NAME=$(basename "$BIN_PATH")
+    LOCK_PATH="${TASK_PATH}.lock"
 
-    parse_binary "$BIN_NAME"
+    if ! mv "$TASK_PATH" "$LOCK_PATH" 2>/dev/null; then
+        continue
+    fi
 
-    echo "run: $BIN_NAME"
+    TASK_NAME="$(basename "$TASK_PATH")"
+    parse_task_name "$TASK_NAME"
 
-    for t in "${THREADS_LIST[@]}"; do
-        for r in $(seq 1 $RUNS); do
+    echo "run: $TASK_NAME"
 
-            if exists_record "$BIN_NAME" "$t" "$r"; then
-                echo "skip: $BIN_NAME t=$t r=$r"
-                continue
-            fi
+    TIME="$("$LOCK_PATH" | awk -F'=' '/time=/ {print $2}')"
 
-            TIME=$(OMP_NUM_THREADS=$t "$BIN_PATH" | awk -F'=' '/time=/ {print $2}')
+    echo "${SOURCE},${TASK_NAME},${COMPILER},${OPT},${N},${THREADS},${TIME},${HOST}" >>"$PART_CSV"
 
-            echo "${SOURCE},${BIN_NAME},${COMPILER},${OPT},${N},${t},${r},${TIME}" >>"$CSV_FILE"
-
-        done
-    done
+    mv "$LOCK_PATH" "${TASK_PATH}.done"
 done

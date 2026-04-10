@@ -8,6 +8,9 @@
 #ifndef N
 	#define N (2 * 2 * 2 * 2 * 2 * 2 + 2)
 #endif
+#ifndef N
+	#define THREADS 1
+#endif
 
 float maxeps = 0.1e-7;
 int itmax = 10;
@@ -21,6 +24,8 @@ void verify();
 
 int main(int an, char **as)
 {
+	omp_set_num_threads(THREADS);
+
 	init();
 
 	double start = omp_get_wtime();
