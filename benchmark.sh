@@ -6,6 +6,7 @@ PATTERN="${2:-*}"
 
 RESULTS_DIR="results"
 PARTS_DIR="${RESULTS_DIR}/parts"
+mkdir -p "$PARTS_DIR"
 
 HOST="$(hostname)"
 PID="$$"
@@ -22,18 +23,17 @@ parse_task_name() {
     THREADS="$(echo "$name" | sed -n 's/.*__t-\([0-9]*\).*/\1/p')"
 }
 
-find_next_task() {
-    find "$TASKS_DIR" -maxdepth 1 -type f -name "$PATTERN" \
-        ! -name '*.lock' ! -name '*.done' | sort | head -n 1
-}
+shopt -s nullglob
 
-while true; do
-    TASK_PATH="$(find_next_task)"
+for p in "$TASKS_DIR"/$PATTERN; do
+    [ -f "$p" ] || continue
+    [ -x "$p" ] || continue
 
-    if [ -z "$TASK_PATH" ]; then
-        echo "Нет доступных задач"
-        break
-    fi
+    case "$p" in
+    *.lock | *.done) continue ;;
+    esac
+
+    TASK_PATH="$p"
 
     LOCK_PATH="${TASK_PATH}.lock"
 
