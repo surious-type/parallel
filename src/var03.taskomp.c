@@ -24,7 +24,7 @@ void verify();
 
 int main(int an, char **as)
 {
-	omp_set_num_threads();
+	omp_set_num_threads(THREADS);
 
 	init();
 
