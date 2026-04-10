@@ -2,7 +2,7 @@
 set -euo pipefail
 
 COMPILERS=(gcc icc pgcc xlc_r)
-OPTS=(-O2 -O3 -Ofast -fast)
+OPTS=(-O0 -O2 -O3 -Ofast)
 N_LIST=(66 130 258 514)
 THREADS_LIST=(1 2 4 8 16)
 RUNS=3
