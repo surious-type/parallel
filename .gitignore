@@ -2,6 +2,10 @@ bin/*
 !bin/.gitkeep
 results/*
 !results/.gitkeep
+tasks/*
+!tasks/.gitkeep
+results/parts/*
+!results/parts/.gitkeep
 
 visualization/.venv
 plots
