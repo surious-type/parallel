@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -uo pipefail
 
 TASKS_DIR="${1:-tasks}"
 PATTERN="${2:-*}"
