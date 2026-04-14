@@ -119,24 +119,41 @@ def plot_speedup_figure(group_df: pd.DataFrame, out_path: Path) -> None:
     opts = sorted(group_df["opt"].unique())
     fig, axes = plt.subplots(2, 2, figsize=(14, 10), constrained_layout=True)
     axes = axes.flatten()
-
+    y_max = group_df["speedup"].max()
     for ax, opt in zip(axes, opts):
         opt_df = group_df[group_df["opt"] == opt]
+        threads_all = sorted(opt_df["threads"].unique())
+
+        x_pos = np.arange(len(threads_all))
+        ax.plot(x_pos, threads_all, "--", color="gray", linewidth=1.2, alpha=0.5)
+        threads_labels = sorted(opt_df["threads"].unique())
+        x_pos = np.arange(len(threads_labels))
 
         for n_value in sorted(opt_df["N"].unique()):
-            curve = opt_df[opt_df["N"] == n_value].sort_values("threads")
+            curve = (
+                opt_df[opt_df["N"] == n_value]
+                .sort_values("threads")
+                .set_index("threads")
+                .reindex(threads_labels)
+                .reset_index()
+            )
+
             ax.plot(
-                curve["threads"],
+                x_pos,
                 curve["speedup"],
                 marker="o",
                 linewidth=1.8,
                 label=f"N = {n_value}",
             )
 
+        ax.set_xticks(x_pos)
+        ax.set_xticklabels(threads_labels)
         ax.set_title(f"Оптимизация {opt}")
         ax.set_xlabel("Число нитей")
         ax.set_ylabel("Ускорение")
-        ax.grid(True, alpha=0.3)
+        ax.set_ylim(0, y_max * 1.08)
+        ax.grid(True, which="major", alpha=0.35)
+        ax.grid(True, which="minor", alpha=0.15)
         ax.legend()
 
     for index in range(len(opts), len(axes)):
@@ -157,7 +174,7 @@ def plot_3d_figure(group_df: pd.DataFrame, out_path: Path) -> None:
     opts = sorted(group_df["opt"].unique())
     fig = plt.figure(figsize=(14, 10), constrained_layout=True)
 
-    for position, opt in enumerate(opts, start=1):
+    for position, opt in enumerate(opts[:4], start=1):
         ax = fig.add_subplot(2, 2, position, projection="3d")
         opt_df = group_df[group_df["opt"] == opt].sort_values(["N", "threads"])
 
