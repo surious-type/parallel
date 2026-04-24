@@ -131,9 +131,9 @@ void relax()
 					int j1 = Min(jb + JB2 - 1, N - 2);
 #pragma omp task firstprivate(k0, k1, j0, j1)
 					{
-						for (int j = j0; j <= j1; j++)
-							for (int k = k0; k <= k1; k++)
-								for (int i = 3; i <= N - 4; i++)
+						for (int i = 3; i <= N - 4; i++)
+							for (int j = j0; j <= j1; j++)
+								for (int k = k0; k <= k1; k++)
 								{
 									A[i][j][k] =
 										(A[i - 1][j][k] + A[i + 1][j][k] + A[i - 2][j][k] +
@@ -163,8 +163,8 @@ void relax()
 							float local_max = 0.0f;
 
 							for (int i = i0; i <= i1; i++)
-								for (int k = k0; k <= k1; k++)
-									for (int j = 3; j <= N - 4; j++)
+								for (int j = 3; j <= N - 4; j++)
+									for (int k = k0; k <= k1; k++)
 									{
 										float oldv = A[i][j][k];
 										float newv =
@@ -194,8 +194,8 @@ void verify()
 	s = 0.0f;
 
 	for (int k = 0; k <= N - 1; k++)
-		for (int i = 0; i <= N - 1; i++)
-			for (int j = 0; j <= N - 1; j++)
+		for (int j = 0; j <= N - 1; j++)
+			for (int i = 0; i <= N - 1; i++)
 			{
 				s = s + A[i][j][k] * (i + 1) * (j + 1) * (k + 1) / (N * N * N);
 			}

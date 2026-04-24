@@ -6,6 +6,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
+from utils import sanitize_filename
+from data import aggregate_times, load_data, unique_threads, unique_opts, unique_n
+
 
 REQUIRED_COLUMNS = {"source", "compiler", "opt", "N", "threads", "time"}
 
@@ -18,66 +21,8 @@ def parse_args():
     return parser.parse_args()
 
 
-def sanitize_filename(value: str) -> str:
-    bad = '<>:"/\\|?* '
-    result = str(value)
-    for ch in bad:
-        result = result.replace(ch, "_")
-    return result.strip("_")
-
-
 def get_output_dir(csv_path: Path) -> Path:
     return csv_path.parent / f"{csv_path.stem}_report"
-
-
-def load_data(csv_path: Path) -> pd.DataFrame:
-    df = pd.read_csv(csv_path)
-
-    missing = REQUIRED_COLUMNS - set(df.columns)
-    if missing:
-        missing_str = ", ".join(sorted(missing))
-        raise ValueError(f"В CSV отсутствуют обязательные колонки: {missing_str}")
-
-    df = df.copy()
-    df["N"] = pd.to_numeric(df["N"], errors="coerce")
-    df["threads"] = pd.to_numeric(df["threads"], errors="coerce")
-    df["time"] = pd.to_numeric(df["time"], errors="coerce")
-
-    df = df.dropna(subset=["source", "compiler", "opt", "N", "threads", "time"]).copy()
-    df["N"] = df["N"].astype(int)
-    df["threads"] = df["threads"].astype(int)
-
-    return df
-
-
-def aggregate_times(df: pd.DataFrame) -> pd.DataFrame:
-    return (
-        df.groupby(["source", "compiler", "opt", "N", "threads"], as_index=False)[
-            "time"
-        ]
-        .mean()
-        .sort_values(["source", "compiler", "opt", "N", "threads"])
-        .reset_index(drop=True)
-    )
-
-
-def add_speedup(df: pd.DataFrame) -> pd.DataFrame:
-    baseline = (
-        df[df["threads"] == 1][["source", "compiler", "opt", "N", "time"]]
-        .rename(columns={"time": "time_1_thread"})
-        .drop_duplicates(subset=["source", "compiler", "opt", "N"])
-    )
-
-    result = df.merge(
-        baseline,
-        on=["source", "compiler", "opt", "N"],
-        how="left",
-    )
-
-    result = result.dropna(subset=["time_1_thread"]).copy()
-    result["speedup"] = result["time_1_thread"] / result["time"]
-
-    return result
 
 
 def build_summary(speedup_df: pd.DataFrame) -> pd.DataFrame:
@@ -112,108 +57,237 @@ def save_summary(summary_df: pd.DataFrame, out_dir: Path) -> Path:
     return out_path
 
 
-def plot_speedup_figure(group_df: pd.DataFrame, out_path: Path) -> None:
-    source = group_df["source"].iloc[0]
-    compiler = group_df["compiler"].iloc[0]
+from typing import Tuple
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
 
-    opts = sorted(group_df["opt"].unique())
-    fig, axes = plt.subplots(2, 2, figsize=(14, 10), constrained_layout=True)
-    axes = axes.flatten()
-    y_max = group_df["speedup"].max()
-    for ax, opt in zip(axes, opts):
-        opt_df = group_df[group_df["opt"] == opt]
-        threads_all = sorted(opt_df["threads"].unique())
 
+def make_plot():
+    count = 1
+
+    def plot_speedup_by_n_figure(
+    group_df: pd.DataFrame,
+    source: str,
+    compiler: str,
+    ) -> Tuple[plt.Figure, np.ndarray]:
+        nonlocal count
+
+        n_values = unique_n(group_df)
+        opts = unique_opts(group_df)
+        threads_all = unique_threads(group_df)
+    
+        fig, axes = plt.subplots(2, 2, figsize=(14, 10), constrained_layout=True)
+        axes = axes.flatten()
+    
+        y_max = float(group_df["speedup"].max())
         x_pos = np.arange(len(threads_all))
-        ax.plot(x_pos, threads_all, "--", color="gray", linewidth=1.2, alpha=0.5)
-        threads_labels = sorted(opt_df["threads"].unique())
-        x_pos = np.arange(len(threads_labels))
-
-        for n_value in sorted(opt_df["N"].unique()):
-            curve = (
-                opt_df[opt_df["N"] == n_value]
-                .sort_values("threads")
-                .set_index("threads")
-                .reindex(threads_labels)
-                .reset_index()
+    
+        for ax, opt in zip(axes, opts):
+            opt_df = group_df[group_df["opt"] == opt]
+    
+            ax.plot(
+                x_pos,
+                threads_all,
+                "--",
+                color="gray",
+                linewidth=1.2,
+                alpha=0.5,
+                label="_nolegend_",
             )
+    
+            for n_value in n_values:
+                curve = (
+                    opt_df[opt_df["N"] == n_value]
+                    .sort_values("threads")
+                    .set_index("threads")
+                    .reindex(threads_all)
+                    .reset_index()
+                )
+    
+                ax.plot(
+                    x_pos,
+                    curve["speedup"],
+                    marker="o",
+                    linewidth=1.8,
+                    label=f"N = {n_value}",
+                )
+    
+            ax.set_xticks(x_pos)
+            ax.set_xticklabels(threads_all)
+            ax.set_title(f"Оптимизация {opt}")
+            ax.set_xlabel("Число нитей")
+            ax.set_ylabel("Ускорение")
+            ax.set_ylim(0, y_max * 1.08 if y_max > 0 else 1.0)
+            ax.grid(True, which="major", alpha=0.35)
+            ax.grid(True, which="minor", alpha=0.15)
+            ax.legend()
+    
+        for index in range(len(opts), len(axes)):
+            axes[index].axis("off")
+    
+        fig.suptitle(
+            f"График {count}. Ускорение от размерности данных. Исходник: {source}. Компилятор: {compiler}",
+            fontsize=14,
+        )
+
+        count += 1
+    
+        return fig, axes
+    
+    
+    def plot_speedup_by_opt_figure(
+        group_df: pd.DataFrame,
+        source: str,
+        compiler: str,
+    ) -> Tuple[plt.Figure, np.ndarray]:
+        nonlocal count
+
+        n_values = unique_n(group_df)
+        opts = unique_opts(group_df)
+        threads_all = unique_threads(group_df)
+    
+        fig, axes = plt.subplots(2, 2, figsize=(14, 10), constrained_layout=True)
+        axes = axes.flatten()
+    
+        y_max = float(group_df["speedup"].max())
+        x_pos = np.arange(len(threads_all))
+    
+        for ax, n_value in zip(axes, n_values):
+            n_df = group_df[group_df["N"] == n_value]
 
             ax.plot(
                 x_pos,
-                curve["speedup"],
-                marker="o",
-                linewidth=1.8,
-                label=f"N = {n_value}",
+                threads_all,
+                "--",
+                color="gray",
+                linewidth=1.2,
+                alpha=0.5,
+                label="_nolegend_",
             )
+    
+            for opt in opts:
+                curve = (
+                    n_df[n_df["opt"] == opt]
+                    .sort_values("threads")
+                    .set_index("threads")
+                    .reindex(threads_all)
+                    .reset_index()
+                )
+    
+                ax.plot(
+                    x_pos,
+                    curve["speedup"],
+                    marker="o",
+                    linewidth=1.8,
+                    label=f"{opt}",
+                )
+    
+            ax.set_xticks(x_pos)
+            ax.set_xticklabels(threads_all)  
+    
+            ax.set_title(f"N = {n_value}")
+            ax.set_xlabel("Число нитей")
+            ax.set_ylabel("Ускорение")
+            ax.set_ylim(0, y_max * 1.08 if y_max > 0 else 1.0)
+            ax.grid(True, alpha=0.3)
+            ax.legend()
+    
+        for index in range(len(n_values), len(axes)):
+            axes[index].axis("off")
+    
+        fig.suptitle(
+            f"График {count}. Ускорение от оптимизации. Исходник: {source}. Компилятор: {compiler}",
+            fontsize=14,
+        )
 
-        ax.set_xticks(x_pos)
-        ax.set_xticklabels(threads_labels)
-        ax.set_title(f"Оптимизация {opt}")
-        ax.set_xlabel("Число нитей")
-        ax.set_ylabel("Ускорение")
-        ax.set_ylim(0, y_max * 1.08)
-        ax.grid(True, which="major", alpha=0.35)
-        ax.grid(True, which="minor", alpha=0.15)
-        ax.legend()
+        count += 1
+    
+        return fig, axes
+    
+    
+    def plot_3d_figure(
+        group_df: pd.DataFrame, 
+        source: str,
+        compiler: str,
+    ) -> Tuple[plt.Figure, np.ndarray]:
+        nonlocal count
 
-    for index in range(len(opts), len(axes)):
-        axes[index].axis("off")
+        opts = unique_opts(group_df)
+    
+        fig, axes = plt.subplots(2, 2, figsize=(18, 22),
+            subplot_kw={"projection": "3d"},
+        )
+        axes = axes.flatten()
+    
+        threads_all = unique_threads(group_df)
 
-    fig.suptitle(
-        f"Графики ускорения: source={source}, compiler={compiler}",
-        fontsize=14,
-    )
-    fig.savefig(out_path, dpi=200)
-    plt.close(fig)
+        for ax, opt in zip(axes, opts):
+            opt_df = group_df[group_df["opt"] == opt].sort_values(["N", "threads"])
+        
+            pivot = opt_df.pivot_table(
+                index="N",
+                columns="threads",
+                values="time",
+                aggfunc="mean"
+            )
+        
+            pivot = pivot.reindex(columns=threads_all)
+        
+            x_values = np.arange(len(threads_all))  # категории
+            y_values = pivot.index.to_numpy()
+        
+            x_grid, y_grid = np.meshgrid(x_values, y_values)
+            z_grid = pivot.to_numpy()
+        
+            ax.plot_surface(x_grid, y_grid, z_grid, alpha=0.9)
+        
+            ax.set_xticks(x_values)
+            ax.set_xticklabels(threads_all)
+        
+            ax.set_title(f"Оптимизация {opt}")
+            ax.set_xlabel("Число нитей")
+            ax.set_ylabel("N")
+            ax.set_zlabel("Время")
+    
+        for index in range(len(opts), len(axes)):
+            axes[index].axis("off")
+    
+        fig.suptitle(
+            f"График {count}. 3D по времени. Исходник: {source}. Компилятор: {compiler}",
+            fontsize=14,
+        )
 
+        count += 1
 
-def plot_3d_figure(group_df: pd.DataFrame, out_path: Path) -> None:
-    source = group_df["source"].iloc[0]
-    compiler = group_df["compiler"].iloc[0]
+        return fig, axes
 
-    opts = sorted(group_df["opt"].unique())
-    fig = plt.figure(figsize=(14, 10), constrained_layout=True)
-
-    for position, opt in enumerate(opts[:4], start=1):
-        ax = fig.add_subplot(2, 2, position, projection="3d")
-        opt_df = group_df[group_df["opt"] == opt].sort_values(["N", "threads"])
-
-        pivot = opt_df.pivot(index="N", columns="threads", values="time")
-        x_values = pivot.columns.to_numpy()
-        y_values = pivot.index.to_numpy()
-        x_grid, y_grid = np.meshgrid(x_values, y_values)
-        z_grid = pivot.to_numpy()
-
-        ax.plot_surface(x_grid, y_grid, z_grid, alpha=0.9)
-        ax.set_title(f"Оптимизация {opt}")
-        ax.set_xlabel("Число нитей")
-        ax.set_ylabel("N")
-        ax.set_zlabel("Время")
-
-    for position in range(len(opts) + 1, 5):
-        ax = fig.add_subplot(2, 2, position, projection="3d")
-        ax.set_axis_off()
-
-    fig.suptitle(
-        f"3D-графики времени: source={source}, compiler={compiler}",
-        fontsize=14,
-    )
-    fig.savefig(out_path, dpi=200)
-    plt.close(fig)
+    return plot_speedup_by_n_figure, plot_speedup_by_opt_figure, plot_3d_figure
 
 
 def build_plots(speedup_df: pd.DataFrame, out_dir: Path) -> list[Path]:
     created_files = []
+    dpi = 200
 
     for (source, compiler), group_df in speedup_df.groupby(["source", "compiler"]):
         suffix = f"{sanitize_filename(source)}__{sanitize_filename(compiler)}"
 
-        speedup_path = out_dir / f"speedup_{suffix}.png"
-        plot_speedup_figure(group_df, speedup_path)
+        speedup_path = out_dir / f"speedup_n_{suffix}.png"
+        fig = plot_speedup_by_n_figure(group_df, source, compiler)
+        fig.savefig(speedup_path, dpi=dpi, bbox_inches="tight")
+        plt.close(fig)
+        created_files.append(speedup_path)
+
+        speedup_path = out_dir / f"speedup_opt_{suffix}.png"
+        fig = plot_speedup_by_opt_figure(group_df, source, compiler)
+        fig.savefig(speedup_path, dpi=dpi, bbox_inches="tight")
+        plt.close(fig)
         created_files.append(speedup_path)
 
         plot3d_path = out_dir / f"surface3d_{suffix}.png"
-        plot_3d_figure(group_df, plot3d_path)
+        fig = plot_3d_figure(group_df, source, compiler)
+        fig.savefig(plot3d_path, dpi=dpi, bbox_inches="tight")
+        plt.close(fig)
         created_files.append(plot3d_path)
 
     return created_files
