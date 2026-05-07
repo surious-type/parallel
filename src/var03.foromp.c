@@ -79,8 +79,8 @@ void relax()
 				}
 
 #pragma omp for schedule(static)
-		for (int i = 3; i <= N - 4; i++)
-			for (int j = 1; j <= N - 2; j++)
+		for (int j = 1; j <= N - 2; j++)
+			for (int i = 3; i <= N - 4; i++)
 				for (int k = 1; k <= N - 2; k++)
 				{
 					A[i][j][k] = (A[i - 1][j][k] + A[i + 1][j][k] + A[i - 2][j][k] +

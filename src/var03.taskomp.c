@@ -29,17 +29,19 @@ int main(int an, char **as)
 	init();
 
 	double start = omp_get_wtime();
-
+#pragma omp parallel
 	for (int it = 1; it <= itmax; it++)
 	{
 		eps = 0.0f;
 
 		relax();
-
+#pragma omp barrier
+#pragma omp single nowait
 		printf("it=%d eps=%f\n", it, eps);
 
 		if (eps < maxeps)
 			break;
+#pragma omp barrier
 	}
 
 	double end = omp_get_wtime();
@@ -89,101 +91,80 @@ void relax()
 	int KB3 = block;
 	int IB3 = block;
 
-#pragma omp parallel
-	{
-#pragma omp single
-		{
 #pragma omp taskgroup
-			for (int ib = 1; ib <= N - 2; ib += IB1)
-				for (int jb = 1; jb <= N - 2; jb += JB1)
-				{
-					int j0 = jb;
-					int j1 = Min(jb + JB1 - 1, N - 2);
-					int i0 = ib;
-					int i1 = Min(ib + IB1 - 1, N - 2);
+	for (int ib = 1; ib <= N - 2; ib += IB1)
+		for (int jb = 1; jb <= N - 2; jb += JB1)
+		{
+			int j0 = jb;
+			int j1 = Min(jb + JB1 - 1, N - 2);
+			int i0 = ib;
+			int i1 = Min(ib + IB1 - 1, N - 2);
 #pragma omp task firstprivate(j0, j1, i0, i1)
-					{
-						for (int i = i0; i <= i1; i++)
-							for (int j = j0; j <= j1; j++)
-								for (int k = 3; k <= N - 4; k++)
-								{
-									A[i][j][k] =
-										(A[i][j][k - 1] + A[i][j][k + 1] + A[i][j][k - 2] +
-										 A[i][j][k + 2] + A[i][j][k - 3] + A[i][j][k + 3]) /
-										6.0f;
-								}
-					}
-				}
-		}
-	}
-
-#pragma omp parallel
-	{
-#pragma omp single
-		{
-#pragma omp taskgroup
-			for (int jb = 1; jb <= N - 2; jb += JB2)
-				for (int kb = 1; kb <= N - 2; kb += KB2)
-				{
-					int k0 = kb;
-					int k1 = Min(kb + KB2 - 1, N - 2);
-					int j0 = jb;
-					int j1 = Min(jb + JB2 - 1, N - 2);
-#pragma omp task firstprivate(k0, k1, j0, j1)
-					{
-						for (int i = 3; i <= N - 4; i++)
-							for (int j = j0; j <= j1; j++)
-								for (int k = k0; k <= k1; k++)
-								{
-									A[i][j][k] =
-										(A[i - 1][j][k] + A[i + 1][j][k] + A[i - 2][j][k] +
-										 A[i + 2][j][k] + A[i - 3][j][k] + A[i + 3][j][k]) /
-										6.0f;
-								}
-					}
-				}
-		}
-	}
-#pragma omp parallel
-	{
-#pragma omp single
-		{
-#pragma omp taskgroup
 			{
-				for (int ib = 1; ib <= N - 2; ib += IB3)
-					for (int kb = 1; kb <= N - 2; kb += KB3)
-					{
-						int k0 = kb;
-						int k1 = Min(kb + KB3 - 1, N - 2);
-						int i0 = ib;
-						int i1 = Min(ib + IB3 - 1, N - 2);
-
-#pragma omp task firstprivate(k0, k1, i0, i1) shared(eps)
+				for (int i = i0; i <= i1; i++)
+					for (int j = j0; j <= j1; j++)
+						for (int k = 3; k <= N - 4; k++)
 						{
-							float local_max = 0.0f;
-
-							for (int i = i0; i <= i1; i++)
-								for (int j = 3; j <= N - 4; j++)
-									for (int k = k0; k <= k1; k++)
-									{
-										float oldv = A[i][j][k];
-										float newv =
-											(A[i][j - 1][k] + A[i][j + 1][k] + A[i][j - 2][k] +
-											 A[i][j + 2][k] + A[i][j - 3][k] + A[i][j + 3][k]) /
-											6.0f;
-
-										A[i][j][k] = newv;
-										local_max = Max(local_max, fabsf(oldv - newv));
-									}
-
-#pragma omp critical
-							{
-								eps = Max(eps, local_max);
-							}
+							A[i][j][k] = (A[i][j][k - 1] + A[i][j][k + 1] + A[i][j][k - 2] +
+										  A[i][j][k + 2] + A[i][j][k - 3] + A[i][j][k + 3]) /
+										 6.0f;
 						}
-					}
 			}
 		}
+
+#pragma omp taskgroup
+	for (int jb = 1; jb <= N - 2; jb += JB2)
+		for (int kb = 1; kb <= N - 2; kb += KB2)
+		{
+			int k0 = kb;
+			int k1 = Min(kb + KB2 - 1, N - 2);
+			int j0 = jb;
+			int j1 = Min(jb + JB2 - 1, N - 2);
+#pragma omp task firstprivate(k0, k1, j0, j1)
+			{
+				for (int i = 3; i <= N - 4; i++)
+					for (int j = j0; j <= j1; j++)
+						for (int k = k0; k <= k1; k++)
+						{
+							A[i][j][k] = (A[i - 1][j][k] + A[i + 1][j][k] + A[i - 2][j][k] +
+										  A[i + 2][j][k] + A[i - 3][j][k] + A[i + 3][j][k]) /
+										 6.0f;
+						}
+			}
+		}
+#pragma omp taskgroup
+	{
+		for (int ib = 1; ib <= N - 2; ib += IB3)
+			for (int kb = 1; kb <= N - 2; kb += KB3)
+			{
+				int k0 = kb;
+				int k1 = Min(kb + KB3 - 1, N - 2);
+				int i0 = ib;
+				int i1 = Min(ib + IB3 - 1, N - 2);
+
+#pragma omp task firstprivate(k0, k1, i0, i1) shared(eps)
+				{
+					float local_max = 0.0f;
+
+					for (int i = i0; i <= i1; i++)
+						for (int j = 3; j <= N - 4; j++)
+							for (int k = k0; k <= k1; k++)
+							{
+								float oldv = A[i][j][k];
+								float newv = (A[i][j - 1][k] + A[i][j + 1][k] + A[i][j - 2][k] +
+											  A[i][j + 2][k] + A[i][j - 3][k] + A[i][j + 3][k]) /
+											 6.0f;
+
+								A[i][j][k] = newv;
+								local_max = Max(local_max, fabsf(oldv - newv));
+							}
+
+#pragma omp critical
+					{
+						eps = Max(eps, local_max);
+					}
+				}
+			}
 	}
 }
 
