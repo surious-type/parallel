@@ -38,7 +38,6 @@ void relax(int rank, int size, int i_start, int i_end, int local_n,
 	 * Первый проход.
 	 *
 	 * Обновление по направлению k.
-	 * MPI-обмен не нужен, потому что каждый процесс хранит полную ось k.
 	 */
 	for (int li = 0; li < local_n; li++)
 	{
@@ -140,8 +139,6 @@ void relax(int rank, int size, int i_start, int i_end, int local_n,
 	 * Третий проход.
 	 *
 	 * Обновление по направлению j.
-	 * MPI-обмен не нужен, потому что каждый процесс хранит полную ось j.
-	 * Здесь же считаем eps.
 	 */
 	for (int li = 0; li < local_n; li++)
 	{
