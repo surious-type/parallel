@@ -1,7 +1,7 @@
 #include <math.h>
 #include <mpi.h>
 #include <stdio.h>
-#include <string.h>
+#include <stdlib.h>
 
 #define Max(a, b) ((a) > (b) ? (a) : (b))
 #define GHOST 3
@@ -31,8 +31,15 @@ void init(int i_start, int local_n, float A[local_n + 2 * GHOST][N][N])
 	}
 }
 
-void pass_k(int i_start, int local_n, float A[local_n + 2 * GHOST][N][N])
+void relax(int rank, int size, int i_start, int i_end, int local_n,
+		   float A[local_n + 2 * GHOST][N][N], float *eps)
 {
+	/*
+	 * Первый проход.
+	 *
+	 * Обновление по направлению k.
+	 * MPI-обмен не нужен, потому что каждый процесс хранит полную ось k.
+	 */
 	for (int li = 0; li < local_n; li++)
 	{
 		int i = i_start + li;
@@ -49,59 +56,55 @@ void pass_k(int i_start, int local_n, float A[local_n + 2 * GHOST][N][N])
 							  6.0f;
 			}
 	}
-}
-
-void exchange_right_ghost(int rank, int size, int local_n, float A[local_n + 2 * GHOST][N][N])
-{
-	int left = (rank == 0) ? MPI_PROC_NULL : rank - 1;
-	int right = (rank == size - 1) ? MPI_PROC_NULL : rank + 1;
 
 	/*
-	 * Отправляем первые 3 свои плоскости левому соседу.
-	 * Получаем первые 3 плоскости правого соседа.
+	 * Перед вторым проходом.
 	 *
-	 * Это нужно перед проходом по i,
-	 * потому что формула использует i+1, i+2, i+3.
+	 * Для вычисления по i нужны старые значения i+1, i+2, i+3.
+	 * Поэтому каждый процесс получает первые 3 плоскости правого соседа
+	 * в свой правый ghost.
 	 */
-	MPI_Sendrecv(&A[GHOST][0][0], // буфер отправки
-				 GHOST * N * N,	  // сколько float отправляем
-				 MPI_FLOAT,		  // тип данных
-				 left,			  // кому отправляем
-				 100,			  // тег отправки
+	int old_left = (rank == 0) ? MPI_PROC_NULL : rank - 1;
+	int old_right = (rank == size - 1) ? MPI_PROC_NULL : rank + 1;
 
-				 &A[GHOST + local_n][0][0], // буфер приема
-				 GHOST * N * N,				// сколько float принимаем
+	MPI_Sendrecv(&A[GHOST][0][0], // первые 3 реальные плоскости отправляем влево
+				 GHOST * N * N,				// количество float-элементов
 				 MPI_FLOAT,					// тип данных
-				 right,						// от кого принимаем
-				 100,						// тег приема
-
+				 old_left,					// левый сосед
+				 100,						// тег отправки
+				 &A[GHOST + local_n][0][0], // сюда принимаем правый ghost
+				 GHOST * N * N, // количество принимаемых float-элементов
+				 MPI_FLOAT,		// тип данных
+				 old_right,		// правый сосед
+				 100,			// тег приема
 				 MPI_COMM_WORLD,   // коммуникатор
-				 MPI_STATUS_IGNORE // статус не нужен
+				 MPI_STATUS_IGNORE // статус не используем
 	);
-}
-
-void pass_i(int rank, int size, int i_start, int i_end, int local_n,
-			float A[local_n + 2 * GHOST][N][N])
-{
-	int left = rank - 1;
-	int right = rank + 1;
 
 	/*
-	 * Проход по i нельзя делать независимо на всех процессах.
-	 * Есть зависимость от i-1, i-2, i-3.
+	 * Второй проход.
 	 *
-	 * Поэтому rank 1 ждёт данные от rank 0,
-	 * rank 2 ждёт данные от rank 1 и так далее.
+	 * Обновление по направлению i.
+	 * Здесь есть зависимость от уже обновленных i-1, i-2, i-3.
+	 *
+	 * Поэтому процессы идут конвейером:
+	 * rank 0 считает первым,
+	 * rank 1 ждёт rank 0,
+	 * rank 2 ждёт rank 1,
+	 * и так далее.
 	 */
+	int pipe_left = rank - 1;
+	int pipe_right = rank + 1;
+
 	if (rank != 0)
 	{
-		MPI_Recv(&A[0][0][0],	   // сюда принимаем левые ghost-плоскости
-				 GHOST * N * N,	   // 3 плоскости
+		MPI_Recv(&A[0][0][0], // сюда принимаем левые обновленные ghost-плоскости
+				 GHOST * N * N,	   // 3 плоскости по N*N float
 				 MPI_FLOAT,		   // тип данных
-				 left,			   // от левого соседа
-				 200,			   // тег
+				 pipe_left,		   // левый сосед
+				 200,			   // тег сообщения
 				 MPI_COMM_WORLD,   // коммуникатор
-				 MPI_STATUS_IGNORE // статус не нужен
+				 MPI_STATUS_IGNORE // статус не используем
 		);
 	}
 
@@ -121,23 +124,25 @@ void pass_i(int rank, int size, int i_start, int i_end, int local_n,
 			}
 	}
 
-	/*
-	 * Отправляем правому соседу последние 3 уже обновлённые плоскости.
-	 */
 	if (rank != size - 1)
 	{
-		MPI_Send(&A[GHOST + local_n - GHOST][0][0], // последние 3 реальные плоскости
-				 GHOST * N * N,						// 3 плоскости
-				 MPI_FLOAT,							// тип данных
-				 right,								// правому соседу
-				 200,								// тег
-				 MPI_COMM_WORLD						// коммуникатор
+		MPI_Send(
+			&A[GHOST + local_n - GHOST][0][0], // последние 3 уже обновленные реальные плоскости
+			GHOST * N * N, // 3 плоскости по N*N float
+			MPI_FLOAT,	   // тип данных
+			pipe_right,	   // правый сосед
+			200,		   // тег сообщения
+			MPI_COMM_WORLD // коммуникатор
 		);
 	}
-}
 
-void pass_j(int i_start, int local_n, float A[local_n + 2 * GHOST][N][N], float *eps)
-{
+	/*
+	 * Третий проход.
+	 *
+	 * Обновление по направлению j.
+	 * MPI-обмен не нужен, потому что каждый процесс хранит полную ось j.
+	 * Здесь же считаем eps.
+	 */
 	for (int li = 0; li < local_n; li++)
 	{
 		int i = i_start + li;
@@ -160,33 +165,18 @@ void pass_j(int i_start, int local_n, float A[local_n + 2 * GHOST][N][N], float 
 	}
 }
 
-void relax(int rank, int size, int i_start, int i_end, int local_n,
-		   float A[local_n + 2 * GHOST][N][N], float *eps)
-{
-	pass_k(i_start, local_n, A);
-
-	exchange_right_ghost(rank, size, local_n, A);
-
-	pass_i(rank, size, i_start, i_end, local_n, A);
-
-	pass_j(i_start, local_n, A, eps);
-}
-
-float verify(int i_start, int local_n, float A[local_n + 2 * GHOST][N][N])
+float verify(int i_start, int i_end, int local_n, float A[local_n + 2 * GHOST][N][N])
 {
 	float s = 0.0f;
 
-	for (int li = 0; li < local_n; li++)
-	{
-		int i = i_start + li;
-		int ai = li + GHOST;
-
+	for (int k = 0; k <= N - 1; k++)
 		for (int j = 0; j <= N - 1; j++)
-			for (int k = 0; k <= N - 1; k++)
+			for (int i = i_start; i < i_end; i++)
 			{
+				int ai = i - i_start + GHOST;
+
 				s += A[ai][j][k] * (i + 1) * (j + 1) * (k + 1) / (N * N * N);
 			}
-	}
 
 	return s;
 }
@@ -208,25 +198,12 @@ int main(int argc, char **argv)
 	if (local_n < GHOST)
 	{
 		if (rank == 0)
-			printf("Too many MPI processes for N=%d\n", N);
+			fprintf(stderr, "Много процессов для N=%d\n", N);
 
 		MPI_Abort(MPI_COMM_WORLD, 1);
 	}
 
-	/*
-	 * Локальный массив процесса.
-	 *
-	 * Первые 3 плоскости — ghost слева.
-	 * Потом local_n реальных плоскостей.
-	 * Последние 3 плоскости — ghost справа.
-	 */
-	float A[local_n + 2 * GHOST][N][N];
-
-	/*
-	 * Обнуляем весь локальный массив.
-	 * Это нужно, чтобы ghost-слои на краях были нулевыми.
-	 */
-	memset(A, 0, sizeof(A));
+	float(*A)[N][N] = calloc(local_n + 2 * GHOST, sizeof(*A));
 
 	if (rank == 0)
 		printf("%d\n", N);
@@ -243,12 +220,7 @@ int main(int argc, char **argv)
 
 		relax(rank, size, i_start, i_end, local_n, A, &eps_local);
 
-		MPI_Allreduce(&eps_local,  // локальный eps
-					  &eps_global, // общий eps
-					  1,		   // одно число
-					  MPI_FLOAT,   // тип float
-					  MPI_MAX,	   // максимум
-					  MPI_COMM_WORLD);
+		MPI_Allreduce(&eps_local, &eps_global, 1, MPI_FLOAT, MPI_MAX, MPI_COMM_WORLD);
 
 		if (rank == 0)
 			printf("it=%4i   eps=%f\n", it, eps_global);
@@ -268,7 +240,7 @@ int main(int argc, char **argv)
 	if (rank == 0)
 		printf("time=%f\n", time);
 
-	float s_local = verify(i_start, local_n, A);
+	float s_local = verify(i_start, i_end, local_n, A);
 	float s_global = 0.0f;
 
 	MPI_Reduce(&s_local, &s_global, 1, MPI_FLOAT, MPI_SUM, 0, MPI_COMM_WORLD);
@@ -276,6 +248,7 @@ int main(int argc, char **argv)
 	if (rank == 0)
 		printf("  S = %f\n", s_global);
 
+	free(A);
 	MPI_Finalize();
 
 	return 0;
