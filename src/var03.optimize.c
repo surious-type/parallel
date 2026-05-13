@@ -14,11 +14,11 @@ int itmax = 10;
 float eps;
 float A[N][N][N];
 
-void relax();
+void relax(float A[N][N][N]);
 void init();
 void verify();
 
-int main(int an, char **as)
+int main()
 {
 	printf("%d\n", N);
 	int it;
